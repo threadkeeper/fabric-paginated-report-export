@@ -1,0 +1,20 @@
+# Build outputs
+bin/
+obj/
+
+# Secrets and temp files
+_secret.tmp
+*.tmp
+
+# Exported reports
+*.pdf
+Report_*
+
+# User-specific
+*.user
+*.suo
+.vs/
+
+# IDE
+.idea/
+.vscode/

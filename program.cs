@@ -4,11 +4,13 @@ using Microsoft.Rest;
 using Paginated;
 
 // ── Configuration ──────────────────────────────────────────────
-// Set these via environment variables.
-var tenantId   = Environment.GetEnvironmentVariable("PBI_TENANT_ID")      ?? throw new InvalidOperationException("Set PBI_TENANT_ID environment variable.");
-var clientId   = Environment.GetEnvironmentVariable("PBI_CLIENT_ID")      ?? throw new InvalidOperationException("Set PBI_CLIENT_ID environment variable.");
-var secret     = Environment.GetEnvironmentVariable("PBI_CLIENT_SECRET")  ?? throw new InvalidOperationException("Set PBI_CLIENT_SECRET environment variable.");
-var workspace  = Guid.Parse(Environment.GetEnvironmentVariable("PBI_WORKSPACE_ID") ?? throw new InvalidOperationException("Set PBI_WORKSPACE_ID environment variable."));
+// Load .env file if present (values are merged into environment variables).
+DotNetEnv.Env.Load();
+
+var tenantId   = Environment.GetEnvironmentVariable("PBI_TENANT_ID")      ?? throw new InvalidOperationException("Set PBI_TENANT_ID in .env or environment.");
+var clientId   = Environment.GetEnvironmentVariable("PBI_CLIENT_ID")      ?? throw new InvalidOperationException("Set PBI_CLIENT_ID in .env or environment.");
+var secret     = Environment.GetEnvironmentVariable("PBI_CLIENT_SECRET")  ?? throw new InvalidOperationException("Set PBI_CLIENT_SECRET in .env or environment.");
+var workspace  = Guid.Parse(Environment.GetEnvironmentVariable("PBI_WORKSPACE_ID") ?? throw new InvalidOperationException("Set PBI_WORKSPACE_ID in .env or environment."));
 var reportId   = Environment.GetEnvironmentVariable("PBI_REPORT_ID"); // optional — if not set, lists available reports
 
 // ── Step 1: Verify authentication ──────────────────────────────
@@ -61,11 +63,13 @@ else
 }
 
 // Collect parameters from command-line args (format: Name=Value)
-var parameters = args.Length > 0 ? args.ToList() : null;
-if (parameters != null)
+// Default Company parameter if not provided via args
+var parameters = args.Length > 0 ? args.ToList() : new List<string> { "Company=Contoso Suites" };
+if (!parameters.Any(p => p.StartsWith("Company=", StringComparison.OrdinalIgnoreCase)))
 {
-    Console.WriteLine($"\nParameters: {string.Join(", ", parameters)}");
+    parameters.Add("Company=Contoso Suites");
 }
+Console.WriteLine($"\nParameters: {string.Join(", ", parameters)}");
 
 Console.WriteLine($"\n=== Step 3: Exporting report {targetReportId} to PDF ===");
 

@@ -33,10 +33,10 @@ App (C# / MSAL) ──► Entra ID token endpoint ──► Power BI REST API �
 | Requirement | Detail |
 |---|---|
 | ⚡ **Fabric capacity** | The target workspace must be on **dedicated capacity** (Fabric F-SKU or Premium P-SKU). `ExportToFile` is not supported on shared/Pro capacity. |
-| 🔐 **Entra ID app registration** | Single-tenant app with a client secret and the Power BI API permissions listed below |
-| 👥 **Workspace membership** | The service principal must be added as a **Contributor** (minimum) of the target workspace |
-| ⚙️ **Power BI tenant setting** | "Allow service principals to use Power BI APIs" must be enabled in the Power BI Admin Portal |
-| 🛠️ **.NET 8 SDK** | Required to build and run the application |
+| 🔐 **Entra ID app registration** | Single-tenant app with a client secret (no API permissions needed — see Step 2) |
+| 👥 **Workspace membership** | The service principal must be added as a **Member** (minimum) of the target workspace |
+| ⚙️ **Power BI tenant settings** | "Allow service principals to use Power BI APIs" and "Embed content in apps" must be enabled in the Power BI Admin Portal |
+| 🛠️ **.NET 8 SDK** | Required to build the application (not needed at runtime if published as self-contained) |
 
 ---
 
@@ -46,22 +46,19 @@ App (C# / MSAL) ──► Entra ID token endpoint ──► Power BI REST API �
 2. Set **Supported account types** to "Accounts in this organizational directory only" (single tenant)
 3. Note the **Application (client) ID** and **Directory (tenant) ID**
 
-## 🔑 Step 2: Configure API Permissions
+## 🔑 Step 2: API Permissions
 
-Add the following **application** permission on the **Power BI Service** API:
+**No API permissions are needed.** When using a service principal with client credentials, authorization is controlled entirely by:
+1. **Power BI Admin Portal tenant settings** (Step 4 below)
+2. **Workspace role membership** (Step 4 below)
 
-| Permission | Type | Purpose |
-|---|---|---|
-| `Tenant.ReadWrite.All` | Application (Role) | Read/write all Power BI content in tenant (covers listing workspaces, reports, and triggering exports) |
+Per Microsoft's official documentation:
 
-Then grant **admin consent** — either via the portal or CLI:
-```bash
-az ad app permission admin-consent --id <appId>
-```
+> *"A Microsoft Entra application doesn't require you to configure any delegated permissions or application permissions in the Azure portal when it has been created for a service principal. When you create a Microsoft Entra application for a service principal to access the Power BI REST API, we recommended that you avoid adding permissions. They're never used and can cause errors that are hard to troubleshoot."*
+> — [Embed Power BI content with service principal](https://learn.microsoft.com/en-us/power-bi/developer/embedded/embed-service-principal)
 
-### 🤔 Is `User.Read` (Microsoft Graph) required?
-
-**No.** The `User.Read` delegated permission on Microsoft Graph is added by default when creating an app registration in the Azure Portal. It is **not used** by this application since we authenticate via client credentials (no user context). You can safely remove it. It has no effect on the export flow.
+> *"Scopes are not required if you're using a service principal. Once you enable a service principal to be used with Power BI, the application's AD permissions don't take effect anymore. When using a service principal, the application's permissions are managed through the Power BI admin portal."*
+> — [Power BI REST API — Scopes](https://learn.microsoft.com/en-us/rest/api/power-bi/#scopes)
 
 ## 🔐 Step 3: Create a Client Secret
 
@@ -79,7 +76,7 @@ az ad app credential reset --id <appId> --display-name "paginated-export" --year
 The service principal must be a workspace member to access reports and trigger exports.
 
 **Option A — Via the Power BI Portal:**
-Workspace → Settings → Access → Add the app by name → set role to **Contributor** (minimum required).
+Workspace → Settings → Access → Add the app by name → set role to **Member** (minimum required).
 
 **Option B — Via the standard REST API:**
 ```http
@@ -88,7 +85,7 @@ Content-Type: application/json
 
 {
   "identifier": "<service-principal-object-id>",
-  "groupUserAccessRight": "Contributor",
+  "groupUserAccessRight": "Member",
   "principalType": "App"
 }
 ```
@@ -100,7 +97,7 @@ POST https://api.powerbi.com/v1.0/myorg/admin/groups/{groupId}/users
 
 The standard API (Option B) may return **403 Forbidden** when the calling user is not already a direct member of the workspace via the non-admin API path, or when workspace-level inbound networking policies are in effect. In our testing, we encountered this on a Fabric workspace with private networking enabled and had to use the Admin API instead.
 
-> **Verified:** Contributor access is sufficient for listing reports and exporting to PDF. Admin is not required.
+> **Verified:** Member access is sufficient for listing reports and exporting to PDF. Admin is not required.
 
 This behaviour is consistent with the [Power BI REST API documentation for Groups - Add Group User](https://learn.microsoft.com/en-us/rest/api/power-bi/groups/add-group-user), which requires the caller to have workspace access, versus the [Admin - Add Group User](https://learn.microsoft.com/en-us/rest/api/power-bi/admin/groups-add-user) endpoint which operates at the tenant admin level and bypasses workspace-level access checks.
 
@@ -109,23 +106,130 @@ This behaviour is consistent with the [Power BI REST API documentation for Group
 > az ad sp show --id <appId> --query id -o tsv
 > ```
 
-## 🚀 Step 5: Run the Application
+## 🚀 Step 5: Configure the Application
 
-```bash
-# Set required environment variable
-export PBI_CLIENT_SECRET="<your-secret>"
+The application reads configuration from a `.env` file in the working directory. Create a `.env` file with the following values:
 
-# Optional overrides (defaults are in program.cs)
-export PBI_TENANT_ID="<tenant-id>"
-export PBI_CLIENT_ID="<client-id>"
-export PBI_WORKSPACE_ID="<workspace-id>"
-export PBI_REPORT_ID="<report-id>"
-
-# Run with report parameters (Name=Value format)
-dotnet run -- "Company=Contoso Suites"
+```
+PBI_TENANT_ID=<your-entra-tenant-id>
+PBI_CLIENT_ID=<your-app-client-id>
+PBI_CLIENT_SECRET=<your-client-secret>
+PBI_WORKSPACE_ID=<your-workspace-id>
+PBI_REPORT_ID=<your-report-id>
 ```
 
-If `PBI_REPORT_ID` is not set, the program lists all reports in the workspace and exports the first one.
+| Variable | Required | Description |
+|---|---|---|
+| `PBI_TENANT_ID` | Yes | Entra ID (Azure AD) tenant ID |
+| `PBI_CLIENT_ID` | Yes | App registration Application (client) ID |
+| `PBI_CLIENT_SECRET` | Yes | Client secret value |
+| `PBI_WORKSPACE_ID` | Yes | Power BI workspace GUID |
+| `PBI_REPORT_ID` | No | Report GUID. If omitted, exports the first report in the workspace |
+
+> **Security:** The `.env` file is git-ignored. Do not commit secrets to source control.
+
+## ▶️ Step 6: Run the Application
+
+```bash
+# Build and run (requires .NET 8 SDK)
+dotnet run
+
+# Pass report parameters (Name=Value format)
+dotnet run -- "Company=Contoso Suites" "Year=2026"
+```
+
+If `PBI_REPORT_ID` is not set, the program lists all reports in the workspace and exports the first one. If no `Company` parameter is passed, it defaults to `Contoso Suites`.
+
+## 📦 Step 7: Publish as Self-Contained Executable
+
+To deploy without requiring the .NET SDK on the target machine:
+
+```powershell
+dotnet publish -c Release -r win-x64 --self-contained -o C:\PaginatedExport
+```
+
+Then copy the `.env` file into the publish folder:
+
+```powershell
+Copy-Item .env C:\PaginatedExport\.env
+```
+
+Test the published executable:
+
+```powershell
+cd C:\PaginatedExport
+.\paginated.exe
+```
+
+## ⏰ Step 8: Schedule with Windows Task Scheduler
+
+Set up an hourly export using a dedicated service account.
+
+### 8a. Create a local service account
+
+1. Press **Win + R** → type `lusrmgr.msc` → Enter
+2. Click **Users** → right-click → **New User...**
+3. Fill in:
+   - **User name**: `svc_paginated`
+   - **Description**: `Service account for paginated report export`
+   - **Password**: choose a strong password
+   - Uncheck "User must change password at next logon"
+   - Check **"Password never expires"**
+4. Click **Create** → **Close**
+
+### 8b. Grant folder permissions
+
+1. Right-click `C:\PaginatedExport` → **Properties** → **Security** tab
+2. Click **Edit...** → **Add...** → type `svc_paginated` → **Check Names** → **OK**
+3. Select `svc_paginated`, check **Modify** under Allow
+4. Click **Apply** → **OK**
+
+### 8c. Grant "Log on as a batch job" right
+
+1. Press **Win + R** → type `secpol.msc` → Enter
+2. Go to **Local Policies → User Rights Assignment**
+3. Double-click **"Log on as a batch job"**
+4. Click **Add User or Group...** → type `svc_paginated` → **Check Names** → **OK**
+5. Also verify `svc_paginated` is **not** listed under **"Deny log on as a batch job"**
+
+### 8d. Create the scheduled task
+
+1. Press **Win + R** → type `taskschd.msc` → Enter
+2. In **Task Scheduler Library**, right-click → **Create Task...** (not "Create Basic Task")
+
+**General tab:**
+- **Name**: `ExportPaginatedReport`
+- Select **"Run whether user is logged on or not"**
+- Check **"Run with highest privileges"**
+- Click **Change User or Group...** → type `svc_paginated` → **Check Names** → **OK**
+
+**Triggers tab → New...:**
+- **Begin the task**: On a schedule
+- **Settings**: Daily, starting today
+- Check **"Repeat task every"**: `1 hour`, for a duration of: `Indefinitely`
+- Check **Enabled** → **OK**
+
+**Actions tab → New...:**
+- **Action**: Start a program
+- **Program/script**: `C:\PaginatedExport\paginated.exe`
+- **Start in (optional)**: `C:\PaginatedExport`
+
+> ⚠️ **Critical:** The "Start in" field **must** be set to `C:\PaginatedExport`. Without it, the working directory defaults to `C:\Windows\System32` and the `.env` file will not be found, causing the task to fail silently.
+
+**Settings tab:**
+- Check **"Allow task to be run on demand"**
+- Check **"Stop the task if it runs longer than"**: `10 minutes`
+- Set **"If the task is already running"**: Do not start a new instance
+
+Click **OK** → enter the `svc_paginated` password when prompted.
+
+### 8e. Test the task
+
+1. In Task Scheduler, right-click **ExportPaginatedReport** → **Run**
+2. Wait ~30 seconds, then right-click → **Refresh**
+3. **Last Run Result** should show `0x0` (success)
+4. Verify a PDF was created in `C:\PaginatedExport`
+5. Check the task history (right-click → **Properties** → **History** tab) for EventID `102` (`TaskSuccessEvent`)
 
 ---
 
@@ -187,5 +291,6 @@ To resolve this, either:
 | `AADSTS7000215: Invalid client secret` | Entra ID replication delay after secret creation | Wait 30–60 seconds, then retry |
 | `403 Forbidden` on ExportToFile | Workspace is not on dedicated capacity | Assign a Fabric/Premium capacity to the workspace |
 | Export status `Failed` with no error | Paginated report has required parameters not supplied | Pass parameters via `PaginatedReportConfiguration.ParameterValues` |
-| `RequestedFileIsEncryptedOrCorrupted` on import | Fabric inbound networking policy blocking the request | See [Fabric Private Networking](#fabric-private-networking) above |
+| Scheduled task returns `0x1` | "Start in" field not set in Task Scheduler | Edit the action and set "Start in" to `C:\PaginatedExport` so the `.env` file is found |
+| `RequestedFileIsEncryptedOrCorrupted` on import | Fabric inbound networking policy blocking the request | See [Fabric Private Networking](#-fabric-private-networking) above |
 | `403` when adding SP to workspace via API | Standard API requires existing workspace access | Use the Admin API endpoint (`/admin/groups/{id}/users`) or the Power BI Portal |

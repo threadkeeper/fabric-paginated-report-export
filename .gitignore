@@ -3,6 +3,7 @@ bin/
 obj/
 
 # Secrets and temp files
+.env
 _secret.tmp
 *.tmp
 

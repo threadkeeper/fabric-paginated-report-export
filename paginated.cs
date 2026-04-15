@@ -101,7 +101,9 @@ public class PaginatedReportExporter
 
         // Download the exported file
         var fileStream = await pbiClient.Reports.GetFileOfExportToFileAsync(workspaceId, reportId, export.Id);
-        string fileName = $"Report_{reportId}.pdf";
+        var timestamp = DateTime.Now.ToString("yyyy-MM-dd HHmmss");
+        var safeName = string.Join("_", exportStatus.ReportName.Split(Path.GetInvalidFileNameChars()));
+        string fileName = $"{safeName}-{timestamp}.pdf";
         using var file = File.Create(fileName);
         await fileStream.CopyToAsync(file);
 

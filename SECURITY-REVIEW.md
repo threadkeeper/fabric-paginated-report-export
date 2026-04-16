@@ -1,6 +1,5 @@
 # Security Review: Power BI Paginated Report Export — Service Principal
 
-**Prepared for:** SecOps / Identity & Access Review  
 **Application:** Paginated Report PDF Export Service  
 **Date:** April 2026
 
@@ -18,20 +17,9 @@
 
 ## 2. Why No API Permissions Are Needed
 
-When using a service principal with Power BI, Entra ID API permissions (such as `Tenant.ReadWrite.All` or `Report.Read.All`) are **not evaluated**. Authorization is managed entirely by:
+When using a service principal with Power BI, Entra ID API permissions are **not evaluated**. Authorization is managed entirely by Power BI Admin Portal tenant settings and workspace role membership. The service principal has **zero standing permissions** in Entra ID — its access is scoped entirely by the Power BI platform.
 
-1. **Power BI Admin Portal tenant settings** — controls whether service principals can call Power BI APIs at all
-2. **Workspace role membership** — controls which workspaces the service principal can access and what operations it can perform
-
-Microsoft explicitly states:
-
-> *"A Microsoft Entra application doesn't require you to configure any delegated permissions or application permissions in the Azure portal when it has been created for a service principal. When you create a Microsoft Entra application for a service principal to access the Power BI REST API, we recommended that you avoid adding permissions. They're never used and can cause errors that are hard to troubleshoot."*
-> — [Embed Power BI content with service principal](https://learn.microsoft.com/en-us/power-bi/developer/embedded/embed-service-principal)
-
-> *"Scopes are not required if you're using a service principal. Once you enable a service principal to be used with Power BI, the application's AD permissions don't take effect anymore. When using a service principal, the application's permissions are managed through the Power BI admin portal."*
-> — [Power BI REST API — Scopes](https://learn.microsoft.com/en-us/rest/api/power-bi/#scopes)
-
-This means the service principal has **zero standing permissions** in Entra ID — its access is scoped entirely by the Power BI platform.
+For details and Microsoft's official guidance, see [`README.md` — Step 2: API Permissions](README.md#-step-2-api-permissions).
 
 ## 3. What the Service Principal Can Do
 
@@ -41,7 +29,7 @@ The service principal's effective access is determined by two factors:
 
 | Setting | Required Value | Scope |
 |---|---|---|
-| **Allow service principals to use Power BI APIs** | Enabled | Scoped to a dedicated security group |
+| **Service principals can call Fabric public APIs** | Enabled | Scoped to a dedicated security group |
 | **Embed content in apps** | Enabled | Scoped to the same security group |
 | **Export reports as PDF/PowerPoint** | Enabled (default) | Controls whether export is allowed at all |
 
@@ -66,7 +54,7 @@ The service principal **cannot**:
 | **Data exfiltration via export** | SP can export any report in its workspace(s) to PDF | Limit SP to only the workspace(s) needed; monitor export activity via audit logs |
 | **Over-provisioned workspace access** | SP added to workspaces beyond what is required | Audit workspace membership periodically; use a single-purpose workspace |
 | **Token replay** | Stolen access tokens can be used until expiry (typically 1 hour) | Restrict network access; use conditional access policies |
-| **Tenant setting too broad** | "Allow service principals to use Power BI APIs" enabled for entire org | Scope to a dedicated Entra ID security group containing only this SP |
+| **Tenant setting too broad** | "Service principals can call Fabric public APIs" enabled for entire org | Scope to a dedicated Entra ID security group containing only this SP |
 
 ## 5. Current Credential Storage
 
@@ -111,8 +99,6 @@ The service principal **cannot**:
 
 | Resource | URL |
 |---|---|
-| Service principal — no permissions needed | https://learn.microsoft.com/en-us/power-bi/developer/embedded/embed-service-principal |
-| REST API scopes — not used for SP | https://learn.microsoft.com/en-us/rest/api/power-bi/#scopes |
 | Certificate auth (recommended) | https://learn.microsoft.com/en-us/power-bi/developer/embedded/embed-service-principal-certificate |
 | ExportToFile API reference | https://learn.microsoft.com/en-us/rest/api/power-bi/reports/export-to-file-in-group |
 | Export paginated reports | https://learn.microsoft.com/en-us/power-bi/developer/embedded/export-paginated-report |

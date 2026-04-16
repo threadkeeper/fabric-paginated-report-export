@@ -35,7 +35,7 @@ App (C# / MSAL) ──► Entra ID token endpoint ──► Power BI REST API �
 | ⚡ **Fabric capacity** | The target workspace must be on **dedicated capacity** (Fabric F-SKU or Premium P-SKU). `ExportToFile` is not supported on shared/Pro capacity. |
 | 🔐 **Entra ID app registration** | Single-tenant app with a client secret (no API permissions needed — see Step 2) |
 | 👥 **Workspace membership** | The service principal must be added as a **Member** (minimum) of the target workspace |
-| ⚙️ **Power BI tenant settings** | "Allow service principals to use Power BI APIs" and "Embed content in apps" must be enabled in the Power BI Admin Portal |
+| ⚙️ **Power BI tenant settings** | "Embed content in apps" and "Service principals can call Fabric public APIs" must be enabled under Developer settings in the Power BI Admin Portal ([docs](https://learn.microsoft.com/en-us/power-bi/developer/embedded/embed-service-principal#step-3---enable-the-power-bi-service-admin-settings)) |
 | 🛠️ **.NET 8 SDK** | Required to build the application (not needed at runtime if published as self-contained) |
 
 ---
